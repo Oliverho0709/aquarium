@@ -45,13 +45,25 @@ Rules for svgMarkup:
 - Do NOT include xml prolog or DOCTYPE.`;
 
 // Compose the chat completions URL from the configured base.
-// Accepts either ".../openai/v1", ".../openai/v1/", or a full
-// ".../chat/completions" URL.
+// Accepts any of:
+//   - https://<resource>.services.ai.azure.com/openai/v1
+//   - https://<resource>.services.ai.azure.com/openai/v1/chat/completions
+//   - https://<resource>.services.ai.azure.com/api/projects/<name>      (project endpoint — auto-rewritten)
+//   - https://<resource>.services.ai.azure.com                          (resource root — auto-rewritten)
 function buildChatCompletionsUrl(raw) {
   if (!raw) return null;
   const base = raw.trim().replace(/\/+$/, "");
+  // Already pointing at chat completions.
   if (/\/chat\/completions$/i.test(base)) return base;
-  return `${base}/chat/completions`;
+  // Already pointing at the OpenAI v1 base.
+  if (/\/openai\/v1$/i.test(base)) return `${base}/chat/completions`;
+  // Project endpoint or resource root — normalize to /openai/v1/chat/completions.
+  try {
+    const u = new URL(base);
+    return `${u.protocol}//${u.host}/openai/v1/chat/completions`;
+  } catch {
+    return null;
+  }
 }
 
 // Cached AAD credential + token to avoid re-fetching on every call.
