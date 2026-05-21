@@ -3,18 +3,26 @@
 // Body: { description: string }
 // Returns: { svgMarkup, bodyColor, finColor, tailColor, patternColor, summary, source: "ai" }
 //
-// Calls Azure AI Foundry chat completions via the Azure AI Inference REST API.
+// Calls an Azure AI Foundry chat completions deployment via the OpenAI-compatible v1
+// endpoint, e.g. https://<resource>.services.ai.azure.com/openai/v1/chat/completions.
+//
 // Required env vars:
-//   AZURE_AI_FOUNDRY_ENDPOINT - e.g. https://aquarium-resource.services.ai.azure.com/api/projects/aquarium
-//                               (only the resource host is used; project path is stripped)
-//   AZURE_AI_FOUNDRY_KEY      - API key from Azure AI Foundry
+//   AZURE_AI_FOUNDRY_ENDPOINT - e.g. https://aquarium-resource.services.ai.azure.com/openai/v1
+//                               (must be the OpenAI-compatible /openai/v1 base URL)
+//
+// Auth (one of):
+//   AZURE_AI_FOUNDRY_KEY      - API key. If set, sent as `api-key` header.
+//   (else) DefaultAzureCredential is used to fetch a Bearer token for the
+//          scope `https://ai.azure.com/.default`. Requires the Function App's
+//          managed identity to have the appropriate Azure AI role on the
+//          AI Foundry resource (e.g. "Azure AI Developer" or "Cognitive Services User").
+//
 // Optional:
-//   AZURE_AI_FOUNDRY_MODEL    - model deployment name (default: gpt-4o-mini)
-//   AZURE_AI_FOUNDRY_API_VERSION - default: 2024-05-01-preview
+//   AZURE_AI_FOUNDRY_MODEL    - deployment name (default: DeepSeek-V4-Pro)
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
-const DEFAULT_MODEL = process.env.AZURE_AI_FOUNDRY_MODEL || "gpt-4o-mini";
-const API_VERSION = process.env.AZURE_AI_FOUNDRY_API_VERSION || "2024-05-01-preview";
+const DEFAULT_MODEL = process.env.AZURE_AI_FOUNDRY_MODEL || "DeepSeek-V4-Pro";
+const AAD_SCOPE = "https://ai.azure.com/.default";
 
 const SYSTEM_PROMPT = `You are a creative SVG fish designer for a classroom aquarium demo.
 Given a short description, return STRICT JSON (no prose, no markdown) with this exact shape:
@@ -36,28 +44,44 @@ Rules for svgMarkup:
 - Use the four colors above prominently.
 - Do NOT include xml prolog or DOCTYPE.`;
 
-function resolveInferenceEndpoint(raw) {
+// Compose the chat completions URL from the configured base.
+// Accepts either ".../openai/v1", ".../openai/v1/", or a full
+// ".../chat/completions" URL.
+function buildChatCompletionsUrl(raw) {
   if (!raw) return null;
-  // Accept either a project endpoint (.../api/projects/<name>) or the resource root.
-  // Inference REST API lives at: https://<resource>.services.ai.azure.com/models/chat/completions
-  try {
-    const u = new URL(raw);
-    return `${u.protocol}//${u.host}/models/chat/completions?api-version=${API_VERSION}`;
-  } catch {
-    return null;
+  const base = raw.trim().replace(/\/+$/, "");
+  if (/\/chat\/completions$/i.test(base)) return base;
+  return `${base}/chat/completions`;
+}
+
+// Cached AAD credential + token to avoid re-fetching on every call.
+let cachedCredential = null;
+let cachedToken = null; // { token, expiresOnTimestamp }
+
+async function getBearerToken() {
+  if (cachedToken && cachedToken.expiresOnTimestamp - 60_000 > Date.now()) {
+    return cachedToken.token;
   }
+  if (!cachedCredential) {
+    const { DefaultAzureCredential } = require("@azure/identity");
+    cachedCredential = new DefaultAzureCredential();
+  }
+  const tokenResponse = await cachedCredential.getToken(AAD_SCOPE);
+  if (!tokenResponse || !tokenResponse.token) {
+    throw new Error("Failed to acquire AAD token for Azure AI Foundry.");
+  }
+  cachedToken = tokenResponse;
+  return tokenResponse.token;
 }
 
 function extractJson(text) {
   if (!text) return null;
   const trimmed = text.trim();
-  // Some models still wrap in ```json fences; strip them.
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   const body = fenced ? fenced[1] : trimmed;
   try {
     return JSON.parse(body);
   } catch {
-    // Last-ditch: find the first {...} block.
     const start = body.indexOf("{");
     const end = body.lastIndexOf("}");
     if (start >= 0 && end > start) {
@@ -96,29 +120,34 @@ function validateAndCoerce(parsed) {
 }
 
 module.exports = async function generateFish(context, req) {
-  const endpoint = resolveInferenceEndpoint(process.env.AZURE_AI_FOUNDRY_ENDPOINT);
+  const rawEndpoint = process.env.AZURE_AI_FOUNDRY_ENDPOINT;
+  const endpoint = buildChatCompletionsUrl(rawEndpoint);
   const key = process.env.AZURE_AI_FOUNDRY_KEY;
+  const authMode = key ? "api-key" : "aad";
 
-  // Lightweight GET health-check.
   if (req.method.toUpperCase() === "GET") {
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
       body: {
-        configured: Boolean(endpoint && key),
-        endpoint: endpoint,
+        configured: Boolean(endpoint),
+        endpoint,
+        endpointRaw: rawEndpoint || null,
         model: DEFAULT_MODEL,
-        apiVersion: API_VERSION,
+        authMode,
       },
     };
     return;
   }
 
-  if (!endpoint || !key) {
+  if (!endpoint) {
     context.res = {
       status: 503,
       headers: { "Content-Type": "application/json" },
-      body: { error: "AI generator not configured.", configured: false },
+      body: {
+        error: "AI generator not configured: AZURE_AI_FOUNDRY_ENDPOINT not set.",
+        configured: false,
+      },
     };
     return;
   }
@@ -133,13 +162,34 @@ module.exports = async function generateFish(context, req) {
     return;
   }
 
+  // Build auth headers.
+  const headers = { "Content-Type": "application/json" };
+  try {
+    if (key) {
+      headers["api-key"] = key;
+      headers["Authorization"] = `Bearer ${key}`;
+    } else {
+      const token = await getBearerToken();
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  } catch (err) {
+    context.log.error("[generate-fish] Auth failed:", err);
+    context.res = {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+      body: {
+        error: "Failed to authenticate to Azure AI Foundry.",
+        authMode,
+        detail: String(err?.message || err),
+      },
+    };
+    return;
+  }
+
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": key,
-      },
+      headers,
       body: JSON.stringify({
         model: DEFAULT_MODEL,
         messages: [
@@ -158,7 +208,13 @@ module.exports = async function generateFish(context, req) {
       context.res = {
         status: 502,
         headers: { "Content-Type": "application/json" },
-        body: { error: "AI service returned an error.", status: response.status, detail: errBody.slice(0, 500) },
+        body: {
+          error: "AI service returned an error.",
+          status: response.status,
+          authMode,
+          endpoint,
+          detail: errBody.slice(0, 500),
+        },
       };
       return;
     }
@@ -184,7 +240,7 @@ module.exports = async function generateFish(context, req) {
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { ...coerced, source: "ai", model: DEFAULT_MODEL },
+      body: { ...coerced, source: "ai", model: DEFAULT_MODEL, authMode },
     };
   } catch (err) {
     context.log.error("[generate-fish] Unhandled error:", err);
