@@ -1,6 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { generateFishFromDescription } from "../services/fishGenerator";
-import { generateFishWithAi } from "../services/aiFishApi";
+import {
+  generateFishWithAi,
+  fetchAiProvidersStatus,
+  type AiProvider,
+  type AiProvidersStatus,
+} from "../services/aiFishApi";
 import type { GeneratedFishSvg } from "../types";
 import { FishPreview } from "./FishPreview";
 
@@ -22,6 +27,11 @@ const samples = [
   "a friendly shark pretending to be a student",
 ];
 
+const providerLabels: Record<AiProvider, string> = {
+  foundry: "Azure AI Foundry",
+  github: "GitHub Models",
+};
+
 export function DescriptionFishGenerator({
   fishName,
   onFishNameChange,
@@ -35,24 +45,39 @@ export function DescriptionFishGenerator({
   );
   const [aiFish, setAiFish] = useState<GeneratedFishSvg | null>(null);
   const [aiSummary, setAiSummary] = useState<string>("");
+  const [aiInfo, setAiInfo] = useState<{ provider: AiProvider; model: string } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>("");
+  const [providerStatus, setProviderStatus] = useState<AiProvidersStatus | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<AiProvider>("foundry");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAiProvidersStatus().then((status) => {
+      if (cancelled || !status) return;
+      setProviderStatus(status);
+      if (status.defaultProvider) setSelectedProvider(status.defaultProvider);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const previewFish = aiFish ?? proceduralFish;
   const previewSource: "ai" | "procedural" = aiFish ? "ai" : "procedural";
 
   function applyDescription(next: string) {
     setDraftDescription(next);
-    // New description invalidates any previous AI result.
     setAiFish(null);
     setAiSummary("");
+    setAiInfo(null);
     setStatusMessage("");
   }
 
   async function handleAiGenerate() {
     setIsGenerating(true);
-    setStatusMessage("Asking Azure AI Foundry to design your fish…");
-    const result = await generateFishWithAi(draftDescription);
+    setStatusMessage(`Asking ${providerLabels[selectedProvider]} to design your fish…`);
+    const result = await generateFishWithAi(draftDescription, selectedProvider);
     setIsGenerating(false);
     if (result.source === "ai") {
       const fish: GeneratedFishSvg = {
@@ -64,14 +89,16 @@ export function DescriptionFishGenerator({
       };
       setAiFish(fish);
       setAiSummary(result.summary || "");
+      setAiInfo({ provider: result.provider, model: result.model || "" });
       setStatusMessage("AI-generated fish ready. Release it when you're happy.");
       onGenerate(draftDescription, fish);
     } else {
       setAiFish(null);
       setAiSummary("");
+      setAiInfo(null);
       setStatusMessage(
         result.status === 503
-          ? "AI not configured on the server. Using the built-in generator instead."
+          ? `${providerLabels[selectedProvider]} not configured on the server. Using the built-in generator instead.`
           : `AI generation failed (${result.message}). Using the built-in generator instead.`,
       );
       onGenerate(draftDescription, proceduralFish);
@@ -81,9 +108,25 @@ export function DescriptionFishGenerator({
   function handleProceduralGenerate() {
     setAiFish(null);
     setAiSummary("");
+    setAiInfo(null);
     setStatusMessage("Built-in generator used.");
     onGenerate(draftDescription, proceduralFish);
   }
+
+  const providerOptions: Array<{ id: AiProvider; label: string; configured: boolean; model: string }> = [
+    {
+      id: "foundry",
+      label: providerLabels.foundry,
+      configured: providerStatus?.providers.foundry.configured ?? true,
+      model: providerStatus?.providers.foundry.model ?? "DeepSeek-V4-Pro",
+    },
+    {
+      id: "github",
+      label: providerLabels.github,
+      configured: providerStatus?.providers.github.configured ?? true,
+      model: providerStatus?.providers.github.model ?? "openai/gpt-5-mini",
+    },
+  ];
 
   return (
     <div className="creator-panel">
@@ -114,12 +157,34 @@ export function DescriptionFishGenerator({
       <FishPreview svgMarkup={previewFish.svgMarkup} />
       <p className="status-message" aria-live="polite">
         Preview: <strong>{previewSource === "ai" ? "AI generated" : "Built-in"}</strong>
+        {aiInfo ? ` · ${providerLabels[aiInfo.provider]} (${aiInfo.model})` : ""}
         {aiSummary ? ` — ${aiSummary}` : ""}
         {statusMessage ? ` · ${statusMessage}` : ""}
       </p>
+
+      <fieldset className="provider-picker">
+        <legend>AI model</legend>
+        {providerOptions.map((option) => (
+          <label key={option.id} className={!option.configured ? "disabled" : ""}>
+            <input
+              checked={selectedProvider === option.id}
+              disabled={!option.configured}
+              name="ai-provider"
+              onChange={() => setSelectedProvider(option.id)}
+              type="radio"
+              value={option.id}
+            />
+            <span>
+              {option.label}
+              <small>{option.model}{option.configured ? "" : " · not configured"}</small>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
       <div className="generator-actions">
         <button onClick={handleAiGenerate} type="button" disabled={isGenerating}>
-          {isGenerating ? "Generating…" : "✨ Generate with AI"}
+          {isGenerating ? "Generating…" : `✨ Generate with ${providerLabels[selectedProvider]}`}
         </button>
         <button onClick={handleProceduralGenerate} type="button" disabled={isGenerating}>
           Use built-in generator

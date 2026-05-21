@@ -1,27 +1,26 @@
 // HTTP trigger: POST /api/generate-fish
 //
-// Body: { description: string }
-// Returns: { svgMarkup, bodyColor, finColor, tailColor, patternColor, summary, source: "ai" }
+// Body:   { description: string, provider?: "foundry" | "github" }
+// Returns: { svgMarkup, bodyColor, finColor, tailColor, patternColor, summary,
+//            source: "ai", provider, model }
 //
-// Calls an Azure AI Foundry chat completions deployment via the OpenAI-compatible v1
-// endpoint, e.g. https://<resource>.services.ai.azure.com/openai/v1/chat/completions.
+// Two providers supported:
 //
-// Required env vars:
-//   AZURE_AI_FOUNDRY_ENDPOINT - e.g. https://aquarium-resource.services.ai.azure.com/openai/v1
-//                               (must be the OpenAI-compatible /openai/v1 base URL)
+//  1) "foundry" — Azure AI Foundry, OpenAI-compatible /openai/v1/chat/completions
+//     Env vars:
+//       AZURE_AI_FOUNDRY_ENDPOINT (required)  resource root, project endpoint,
+//                                             /openai/v1, or full chat URL
+//       AZURE_AI_FOUNDRY_KEY      (optional)  if set, used as api-key + Bearer
+//                                             else DefaultAzureCredential is used
+//       AZURE_AI_FOUNDRY_MODEL    (optional)  default: DeepSeek-V4-Pro
 //
-// Auth (one of):
-//   AZURE_AI_FOUNDRY_KEY      - API key. If set, sent as `api-key` header.
-//   (else) DefaultAzureCredential is used to fetch a Bearer token for the
-//          scope `https://ai.azure.com/.default`. Requires the Function App's
-//          managed identity to have the appropriate Azure AI role on the
-//          AI Foundry resource (e.g. "Azure AI Developer" or "Cognitive Services User").
-//
-// Optional:
-//   AZURE_AI_FOUNDRY_MODEL    - deployment name (default: DeepSeek-V4-Pro)
+//  2) "github" — GitHub Models inference API
+//     Env vars:
+//       GITHUB_MODELS_TOKEN       (required)  PAT with models:read scope
+//       GITHUB_MODELS_MODEL       (optional)  default: openai/gpt-5-mini
+//       GITHUB_MODELS_ENDPOINT    (optional)  default: https://models.github.ai/inference/chat/completions
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
-const DEFAULT_MODEL = process.env.AZURE_AI_FOUNDRY_MODEL || "DeepSeek-V4-Pro";
 const AAD_SCOPE = "https://ai.azure.com/.default";
 
 const SYSTEM_PROMPT = `You are a creative SVG fish designer for a classroom aquarium demo.
@@ -44,20 +43,13 @@ Rules for svgMarkup:
 - Use the four colors above prominently.
 - Do NOT include xml prolog or DOCTYPE.`;
 
-// Compose the chat completions URL from the configured base.
-// Accepts any of:
-//   - https://<resource>.services.ai.azure.com/openai/v1
-//   - https://<resource>.services.ai.azure.com/openai/v1/chat/completions
-//   - https://<resource>.services.ai.azure.com/api/projects/<name>      (project endpoint — auto-rewritten)
-//   - https://<resource>.services.ai.azure.com                          (resource root — auto-rewritten)
-function buildChatCompletionsUrl(raw) {
+// ---------- Foundry endpoint normalization ----------
+
+function buildFoundryUrl(raw) {
   if (!raw) return null;
   const base = raw.trim().replace(/\/+$/, "");
-  // Already pointing at chat completions.
   if (/\/chat\/completions$/i.test(base)) return base;
-  // Already pointing at the OpenAI v1 base.
   if (/\/openai\/v1$/i.test(base)) return `${base}/chat/completions`;
-  // Project endpoint or resource root — normalize to /openai/v1/chat/completions.
   try {
     const u = new URL(base);
     return `${u.protocol}//${u.host}/openai/v1/chat/completions`;
@@ -66,11 +58,12 @@ function buildChatCompletionsUrl(raw) {
   }
 }
 
-// Cached AAD credential + token to avoid re-fetching on every call.
-let cachedCredential = null;
-let cachedToken = null; // { token, expiresOnTimestamp }
+// ---------- AAD token cache (Foundry only) ----------
 
-async function getBearerToken() {
+let cachedCredential = null;
+let cachedToken = null;
+
+async function getFoundryBearerToken() {
   if (cachedToken && cachedToken.expiresOnTimestamp - 60_000 > Date.now()) {
     return cachedToken.token;
   }
@@ -85,6 +78,89 @@ async function getBearerToken() {
   cachedToken = tokenResponse;
   return tokenResponse.token;
 }
+
+// ---------- Provider registry ----------
+
+function describeProviders() {
+  const foundryEndpoint = buildFoundryUrl(process.env.AZURE_AI_FOUNDRY_ENDPOINT);
+  const foundryKey = process.env.AZURE_AI_FOUNDRY_KEY;
+  const githubEndpoint = (process.env.GITHUB_MODELS_ENDPOINT || "https://models.github.ai/inference/chat/completions").trim();
+  const githubToken = process.env.GITHUB_MODELS_TOKEN;
+  return {
+    foundry: {
+      configured: Boolean(foundryEndpoint),
+      endpoint: foundryEndpoint,
+      endpointRaw: process.env.AZURE_AI_FOUNDRY_ENDPOINT || null,
+      model: process.env.AZURE_AI_FOUNDRY_MODEL || "DeepSeek-V4-Pro",
+      authMode: foundryKey ? "api-key" : "aad",
+    },
+    github: {
+      configured: Boolean(githubToken),
+      endpoint: githubEndpoint,
+      model: process.env.GITHUB_MODELS_MODEL || "openai/gpt-5-mini",
+      authMode: "pat",
+    },
+  };
+}
+
+async function buildFoundryRequest() {
+  const endpoint = buildFoundryUrl(process.env.AZURE_AI_FOUNDRY_ENDPOINT);
+  if (!endpoint) {
+    throw httpError(503, "Foundry not configured: AZURE_AI_FOUNDRY_ENDPOINT not set.");
+  }
+  const key = process.env.AZURE_AI_FOUNDRY_KEY;
+  const headers = { "Content-Type": "application/json" };
+  if (key) {
+    headers["api-key"] = key;
+    headers["Authorization"] = `Bearer ${key}`;
+  } else {
+    const token = await getFoundryBearerToken();
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return {
+    url: endpoint,
+    headers,
+    model: process.env.AZURE_AI_FOUNDRY_MODEL || "DeepSeek-V4-Pro",
+  };
+}
+
+function buildGithubRequest() {
+  const token = process.env.GITHUB_MODELS_TOKEN;
+  if (!token) {
+    throw httpError(503, "GitHub Models not configured: GITHUB_MODELS_TOKEN not set.");
+  }
+  const url = (process.env.GITHUB_MODELS_ENDPOINT || "https://models.github.ai/inference/chat/completions").trim();
+  return {
+    url,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+      "Accept": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    model: process.env.GITHUB_MODELS_MODEL || "openai/gpt-5-mini",
+  };
+}
+
+async function buildProviderRequest(providerId) {
+  switch (providerId) {
+    case "foundry":
+      return await buildFoundryRequest();
+    case "github":
+      return buildGithubRequest();
+    default:
+      throw httpError(400, `Unknown provider "${providerId}". Use "foundry" or "github".`);
+  }
+}
+
+function httpError(status, message, extra) {
+  const err = new Error(message);
+  err.httpStatus = status;
+  if (extra) err.extra = extra;
+  return err;
+}
+
+// ---------- Response parsing ----------
 
 function extractJson(text) {
   if (!text) return null;
@@ -131,35 +207,16 @@ function validateAndCoerce(parsed) {
   };
 }
 
+// ---------- HTTP handler ----------
+
 module.exports = async function generateFish(context, req) {
-  const rawEndpoint = process.env.AZURE_AI_FOUNDRY_ENDPOINT;
-  const endpoint = buildChatCompletionsUrl(rawEndpoint);
-  const key = process.env.AZURE_AI_FOUNDRY_KEY;
-  const authMode = key ? "api-key" : "aad";
+  const providers = describeProviders();
 
   if (req.method.toUpperCase() === "GET") {
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: {
-        configured: Boolean(endpoint),
-        endpoint,
-        endpointRaw: rawEndpoint || null,
-        model: DEFAULT_MODEL,
-        authMode,
-      },
-    };
-    return;
-  }
-
-  if (!endpoint) {
-    context.res = {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-      body: {
-        error: "AI generator not configured: AZURE_AI_FOUNDRY_ENDPOINT not set.",
-        configured: false,
-      },
+      body: { providers, defaultProvider: providers.foundry.configured ? "foundry" : providers.github.configured ? "github" : null },
     };
     return;
   }
@@ -174,36 +231,29 @@ module.exports = async function generateFish(context, req) {
     return;
   }
 
-  // Build auth headers.
-  const headers = { "Content-Type": "application/json" };
+  const providerId =
+    (typeof req.body?.provider === "string" && req.body.provider.toLowerCase()) ||
+    (providers.foundry.configured ? "foundry" : "github");
+
+  let request;
   try {
-    if (key) {
-      headers["api-key"] = key;
-      headers["Authorization"] = `Bearer ${key}`;
-    } else {
-      const token = await getBearerToken();
-      headers["Authorization"] = `Bearer ${token}`;
-    }
+    request = await buildProviderRequest(providerId);
   } catch (err) {
-    context.log.error("[generate-fish] Auth failed:", err);
+    context.log.error(`[generate-fish] Provider setup failed (${providerId}):`, err);
     context.res = {
-      status: 500,
+      status: err.httpStatus || 500,
       headers: { "Content-Type": "application/json" },
-      body: {
-        error: "Failed to authenticate to Azure AI Foundry.",
-        authMode,
-        detail: String(err?.message || err),
-      },
+      body: { error: err.message, provider: providerId },
     };
     return;
   }
 
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetch(request.url, {
       method: "POST",
-      headers,
+      headers: request.headers,
       body: JSON.stringify({
-        model: DEFAULT_MODEL,
+        model: request.model,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: `Design a fish: ${description}` },
@@ -216,15 +266,16 @@ module.exports = async function generateFish(context, req) {
 
     if (!response.ok) {
       const errBody = await response.text();
-      context.log.error("[generate-fish] AI Foundry error", response.status, errBody);
+      context.log.error(`[generate-fish] ${providerId} error`, response.status, errBody);
       context.res = {
         status: 502,
         headers: { "Content-Type": "application/json" },
         body: {
           error: "AI service returned an error.",
+          provider: providerId,
           status: response.status,
-          authMode,
-          endpoint,
+          endpoint: request.url,
+          model: request.model,
           detail: errBody.slice(0, 500),
         },
       };
@@ -237,12 +288,14 @@ module.exports = async function generateFish(context, req) {
     const coerced = validateAndCoerce(parsed);
 
     if (!coerced) {
-      context.log.warn("[generate-fish] Model returned invalid JSON/SVG", content?.slice?.(0, 500));
+      context.log.warn(`[generate-fish] ${providerId} returned invalid JSON/SVG`, content?.slice?.(0, 500));
       context.res = {
         status: 502,
         headers: { "Content-Type": "application/json" },
         body: {
           error: "AI returned invalid fish JSON.",
+          provider: providerId,
+          model: request.model,
           rawPreview: typeof content === "string" ? content.slice(0, 400) : null,
         },
       };
@@ -252,7 +305,7 @@ module.exports = async function generateFish(context, req) {
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { ...coerced, source: "ai", model: DEFAULT_MODEL, authMode },
+      body: { ...coerced, source: "ai", provider: providerId, model: request.model },
     };
   } catch (err) {
     context.log.error("[generate-fish] Unhandled error:", err);

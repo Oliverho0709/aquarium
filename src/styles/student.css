@@ -206,6 +206,61 @@ textarea:focus {
   opacity: 0.7;
 }
 
+.provider-picker {
+  border: 1px solid #c7e0f4;
+  border-radius: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 12px 14px;
+}
+
+.provider-picker legend {
+  color: #004b87;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.provider-picker label {
+  align-items: center;
+  background: #f5fbff;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  flex: 1 1 200px;
+  gap: 10px;
+  padding: 10px 12px;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.provider-picker label:has(input:checked) {
+  background: #e8f4ff;
+  border-color: #00c2ff;
+}
+
+.provider-picker label.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.provider-picker label span {
+  display: flex;
+  flex-direction: column;
+  font-weight: 700;
+  color: #004b87;
+}
+
+.provider-picker label span small {
+  color: #5b7e98;
+  font-weight: 500;
+  font-size: 0.78rem;
+}
+
 .status-message {
   background: #e8fff7;
   border: 1px solid #06d6a0;
