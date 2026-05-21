@@ -1,0 +1,228 @@
+.student-shell {
+  background:
+    radial-gradient(circle at top left, rgba(255, 209, 102, 0.25), transparent 26%),
+    linear-gradient(180deg, #e0fbfc, #f8fcff 38%, #dff6ff);
+  color: #073b4c;
+  min-height: 100vh;
+  padding: 22px;
+}
+
+.student-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 75, 135, 0.12);
+  border-radius: 30px;
+  box-shadow: 0 22px 70px rgba(0, 75, 135, 0.18);
+  margin: 0 auto;
+  max-width: 980px;
+  padding: clamp(22px, 4vw, 44px);
+}
+
+.name-entry-shell {
+  align-items: center;
+  display: grid;
+}
+
+.name-entry {
+  max-width: 680px;
+}
+
+.student-card h1 {
+  font-size: clamp(2.1rem, 6vw, 4.4rem);
+  line-height: 0.95;
+  margin: 10px 0 14px;
+}
+
+.student-card p {
+  color: #335c67;
+}
+
+label {
+  color: #073b4c;
+  display: grid;
+  font-weight: 800;
+  gap: 8px;
+}
+
+input,
+textarea {
+  background: #f7fbff;
+  border: 2px solid #cae9ff;
+  border-radius: 18px;
+  color: #073b4c;
+  padding: 14px 16px;
+}
+
+input:focus,
+textarea:focus {
+  border-color: #118ab2;
+  outline: 3px solid rgba(17, 138, 178, 0.16);
+}
+
+.student-card button,
+.change-name-button {
+  background: #004b87;
+  color: white;
+  padding: 14px 18px;
+}
+
+.student-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.change-name-button {
+  background: rgba(0, 75, 135, 0.14);
+  color: #004b87;
+  margin: 0 0 18px calc(50% - min(490px, calc(50vw - 22px)));
+}
+
+.student-header {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.tab-list {
+  background: #e6f7ff;
+  border-radius: 999px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  margin: 24px 0;
+  padding: 6px;
+}
+
+.tab-list button {
+  background: transparent;
+  color: #004b87;
+}
+
+.tab-list button.active {
+  background: #004b87;
+  color: white;
+}
+
+.creator-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.template-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.template-card {
+  background: #f7fbff;
+  border: 2px solid #cae9ff;
+  border-radius: 20px;
+  color: #073b4c;
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  text-align: left;
+}
+
+.template-card.selected {
+  background: #d9f7ff;
+  border-color: #118ab2;
+}
+
+.template-card span {
+  color: #335c67;
+  font-size: 0.9rem;
+}
+
+.color-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.color-field {
+  background: #f7fbff;
+  border: 1px solid #cae9ff;
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.color-field input {
+  border: 0;
+  height: 46px;
+  padding: 0;
+  width: 100%;
+}
+
+.fish-preview {
+  align-items: center;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.8), transparent 18%),
+    linear-gradient(180deg, #90e0ef, #caf0f8);
+  border: 2px dashed #48cae4;
+  border-radius: 24px;
+  display: grid;
+  min-height: 220px;
+  padding: 24px;
+  place-items: center;
+}
+
+.fish-preview svg {
+  filter: drop-shadow(0 10px 14px rgba(0, 75, 135, 0.15));
+  max-width: 310px;
+  width: 78%;
+}
+
+.sample-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sample-pills button {
+  background: #e6f7ff;
+  color: #004b87;
+  font-size: 0.9rem;
+  padding: 10px 12px;
+}
+
+.status-message {
+  background: #e8fff7;
+  border: 1px solid #06d6a0;
+  border-radius: 16px;
+  color: #075e54;
+  font-weight: 800;
+  margin: 18px 0 0;
+  padding: 14px 16px;
+}
+
+@media (max-width: 760px) {
+  .student-shell {
+    padding: 14px;
+  }
+
+  .student-card {
+    border-radius: 24px;
+  }
+
+  .template-grid,
+  .color-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tab-list {
+    border-radius: 22px;
+    grid-template-columns: 1fr;
+  }
+
+  .change-name-button {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .template-grid,
+  .color-grid {
+    grid-template-columns: 1fr;
+  }
+}
