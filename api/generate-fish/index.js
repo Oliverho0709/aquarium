@@ -152,8 +152,11 @@ function buildGithubRequest() {
     },
     model: process.env.GITHUB_MODELS_MODEL || "openai/gpt-5-mini",
     // GPT-5 family rejects max_tokens and only supports the default temperature.
+    // Reasoning models spend tokens on internal reasoning before emitting output;
+    // give them a large budget and tell them not to over-think this.
     bodyExtras: {
-      max_completion_tokens: 1500,
+      max_completion_tokens: 4000,
+      reasoning_effort: "minimal",
     },
   };
 }
@@ -312,7 +315,8 @@ module.exports = async function generateFish(context, req) {
     }
 
     const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
+    const choice = data?.choices?.[0];
+    const content = choice?.message?.content;
     const parsed = extractJson(content);
     const coerced = validateAndCoerce(parsed);
 
@@ -325,6 +329,8 @@ module.exports = async function generateFish(context, req) {
           error: "AI returned invalid fish JSON.",
           provider: providerId,
           model: request.model,
+          finishReason: choice?.finish_reason || null,
+          usage: data?.usage || null,
           rawPreview: typeof content === "string" ? content.slice(0, 400) : null,
         },
       };
