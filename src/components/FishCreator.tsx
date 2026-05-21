@@ -68,9 +68,9 @@ export function FishCreator({ creatorName, roomId }: FishCreatorProps) {
     }
   }
 
-  function handleGenerate(nextDescription: string) {
+  function handleGenerate(nextDescription: string, fish: GeneratedFishSvg) {
     setDescription(nextDescription);
-    setGeneratedFish(generateFishFromDescription(nextDescription));
+    setGeneratedFish(fish);
     setMessage("Fish generated. Release it when you are ready.");
   }
 

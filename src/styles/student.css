@@ -186,6 +186,26 @@ textarea:focus {
   padding: 10px 12px;
 }
 
+.generator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.generator-actions button {
+  flex: 1 1 200px;
+}
+
+.generator-actions button:first-child {
+  background: linear-gradient(135deg, #7b2ff7, #00c2ff);
+  color: #fff;
+}
+
+.generator-actions button:first-child:disabled {
+  opacity: 0.7;
+}
+
 .status-message {
   background: #e8fff7;
   border: 1px solid #06d6a0;

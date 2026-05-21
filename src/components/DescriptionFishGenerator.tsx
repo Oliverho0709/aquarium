@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { generateFishFromDescription } from "../services/fishGenerator";
+import { generateFishWithAi } from "../services/aiFishApi";
+import type { GeneratedFishSvg } from "../types";
 import { FishPreview } from "./FishPreview";
 
 type DescriptionFishGeneratorProps = {
   fishName: string;
   onFishNameChange: (value: string) => void;
-  onGenerate: (description: string) => void;
+  onGenerate: (description: string, fish: GeneratedFishSvg) => void;
   description: string;
 };
 
@@ -27,7 +29,61 @@ export function DescriptionFishGenerator({
   description,
 }: DescriptionFishGeneratorProps) {
   const [draftDescription, setDraftDescription] = useState(description || samples[0]);
-  const generated = useMemo(() => generateFishFromDescription(draftDescription), [draftDescription]);
+  const proceduralFish = useMemo(
+    () => generateFishFromDescription(draftDescription),
+    [draftDescription],
+  );
+  const [aiFish, setAiFish] = useState<GeneratedFishSvg | null>(null);
+  const [aiSummary, setAiSummary] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string>("");
+
+  const previewFish = aiFish ?? proceduralFish;
+  const previewSource: "ai" | "procedural" = aiFish ? "ai" : "procedural";
+
+  function applyDescription(next: string) {
+    setDraftDescription(next);
+    // New description invalidates any previous AI result.
+    setAiFish(null);
+    setAiSummary("");
+    setStatusMessage("");
+  }
+
+  async function handleAiGenerate() {
+    setIsGenerating(true);
+    setStatusMessage("Asking Azure AI Foundry to design your fish…");
+    const result = await generateFishWithAi(draftDescription);
+    setIsGenerating(false);
+    if (result.source === "ai") {
+      const fish: GeneratedFishSvg = {
+        svgMarkup: result.svgMarkup,
+        bodyColor: result.bodyColor,
+        finColor: result.finColor,
+        tailColor: result.tailColor,
+        patternColor: result.patternColor,
+      };
+      setAiFish(fish);
+      setAiSummary(result.summary || "");
+      setStatusMessage("AI-generated fish ready. Release it when you're happy.");
+      onGenerate(draftDescription, fish);
+    } else {
+      setAiFish(null);
+      setAiSummary("");
+      setStatusMessage(
+        result.status === 503
+          ? "AI not configured on the server. Using the built-in generator instead."
+          : `AI generation failed (${result.message}). Using the built-in generator instead.`,
+      );
+      onGenerate(draftDescription, proceduralFish);
+    }
+  }
+
+  function handleProceduralGenerate() {
+    setAiFish(null);
+    setAiSummary("");
+    setStatusMessage("Built-in generator used.");
+    onGenerate(draftDescription, proceduralFish);
+  }
 
   return (
     <div className="creator-panel">
@@ -43,22 +99,32 @@ export function DescriptionFishGenerator({
       <label>
         Fish description
         <textarea
-          onChange={(event) => setDraftDescription(event.target.value)}
+          onChange={(event) => applyDescription(event.target.value)}
           rows={4}
           value={draftDescription}
         />
       </label>
       <div className="sample-pills">
         {samples.map((sample) => (
-          <button key={sample} onClick={() => setDraftDescription(sample)} type="button">
+          <button key={sample} onClick={() => applyDescription(sample)} type="button">
             {sample}
           </button>
         ))}
       </div>
-      <FishPreview svgMarkup={generated.svgMarkup} />
-      <button onClick={() => onGenerate(draftDescription)} type="button">
-        Generate Fish
-      </button>
+      <FishPreview svgMarkup={previewFish.svgMarkup} />
+      <p className="status-message" aria-live="polite">
+        Preview: <strong>{previewSource === "ai" ? "AI generated" : "Built-in"}</strong>
+        {aiSummary ? ` — ${aiSummary}` : ""}
+        {statusMessage ? ` · ${statusMessage}` : ""}
+      </p>
+      <div className="generator-actions">
+        <button onClick={handleAiGenerate} type="button" disabled={isGenerating}>
+          {isGenerating ? "Generating…" : "✨ Generate with AI"}
+        </button>
+        <button onClick={handleProceduralGenerate} type="button" disabled={isGenerating}>
+          Use built-in generator
+        </button>
+      </div>
     </div>
   );
 }
