@@ -96,7 +96,8 @@ function describeProviders() {
     },
     github: {
       configured: Boolean(githubToken),
-      endpoint: githubEndpoint,
+      endpoint: buildGithubUrl(process.env.GITHUB_MODELS_ENDPOINT),
+      endpointRaw: process.env.GITHUB_MODELS_ENDPOINT || null,
       model: process.env.GITHUB_MODELS_MODEL || "openai/gpt-5-mini",
       authMode: "pat",
     },
@@ -124,12 +125,19 @@ async function buildFoundryRequest() {
   };
 }
 
+function buildGithubUrl(raw) {
+  const base = (raw || "https://models.github.ai/inference/chat/completions").trim().replace(/\/+$/, "");
+  if (/\/chat\/completions$/i.test(base)) return base;
+  // Allow ".../inference" or root host — append the path.
+  return `${base}/chat/completions`;
+}
+
 function buildGithubRequest() {
   const token = process.env.GITHUB_MODELS_TOKEN;
   if (!token) {
     throw httpError(503, "GitHub Models not configured: GITHUB_MODELS_TOKEN not set.");
   }
-  const url = (process.env.GITHUB_MODELS_ENDPOINT || "https://models.github.ai/inference/chat/completions").trim();
+  const url = buildGithubUrl(process.env.GITHUB_MODELS_ENDPOINT);
   return {
     url,
     headers: {
