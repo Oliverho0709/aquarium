@@ -122,6 +122,10 @@ async function buildFoundryRequest() {
     url: endpoint,
     headers,
     model: process.env.AZURE_AI_FOUNDRY_MODEL || "DeepSeek-V4-Pro",
+    bodyExtras: {
+      temperature: 0.9,
+      max_tokens: 900,
+    },
   };
 }
 
@@ -147,6 +151,10 @@ function buildGithubRequest() {
       "X-GitHub-Api-Version": "2022-11-28",
     },
     model: process.env.GITHUB_MODELS_MODEL || "openai/gpt-5-mini",
+    // GPT-5 family rejects max_tokens and only supports the default temperature.
+    bodyExtras: {
+      max_completion_tokens: 1500,
+    },
   };
 }
 
@@ -280,9 +288,8 @@ module.exports = async function generateFish(context, req) {
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: `Design a fish: ${description}` },
         ],
-        temperature: 0.9,
-        max_tokens: 900,
         response_format: { type: "json_object" },
+        ...(request.bodyExtras || {}),
       }),
     });
 
