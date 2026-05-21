@@ -22,10 +22,11 @@ module.exports = async function fishesApi(context, req) {
   try {
     if (method === "GET") {
       const fishes = await storage.listFishes(roomId);
+      const storageInfo = await storage.diagnostics();
       context.res = {
         status: 200,
         headers: { "Content-Type": "application/json" },
-        body: { roomId, fishes, fishCount: fishes.length },
+        body: { roomId, fishes, fishCount: fishes.length, storage: storageInfo },
       };
       return;
     }

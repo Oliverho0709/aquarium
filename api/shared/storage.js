@@ -35,6 +35,13 @@ function createMemoryBackend() {
 
   return {
     name: "memory",
+    diagnostics: {
+      backend: "memory",
+      reason: CONNECTION_STRING
+        ? "Connection string set but Table Storage init failed; using in-memory fallback."
+        : "AZURE_STORAGE_CONNECTION_STRING not set; using in-memory fallback.",
+      persistent: false,
+    },
     async listFishes(roomId) {
       return [...(fishesByRoom.get(roomId) || [])];
     },
@@ -78,9 +85,10 @@ function fishToEntity(fish) {
   return entity;
 }
 
-function createTableBackend(client) {
+function createTableBackend(client, diagnostics) {
   return {
     name: "azure-table",
+    diagnostics,
     async listFishes(roomId) {
       const results = [];
       const iterator = client.listEntities({
@@ -112,31 +120,73 @@ function createTableBackend(client) {
 
 // ---------- Backend selection (memoized) ----------
 
+// Parse non-secret bits out of a Table Storage connection string for debug.
+// We deliberately do NOT include AccountKey or SharedAccessSignature.
+function parseConnectionString(connStr) {
+  const out = {};
+  if (!connStr) return out;
+  for (const part of connStr.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) continue;
+    const key = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1).trim();
+    if (key === "AccountName") out.accountName = value;
+    else if (key === "TableEndpoint") out.tableEndpoint = value;
+    else if (key === "EndpointSuffix") out.endpointSuffix = value;
+    else if (key === "DefaultEndpointsProtocol") out.protocol = value;
+  }
+  return out;
+}
+
 let backendPromise;
 
 async function resolveBackend() {
   if (!CONNECTION_STRING) {
     return createMemoryBackend();
   }
+  const parsed = parseConnectionString(CONNECTION_STRING);
   try {
     const { TableClient } = require("@azure/data-tables");
     const allowInsecure = CONNECTION_STRING.includes("UseDevelopmentStorage");
     const client = TableClient.fromConnectionString(CONNECTION_STRING, TABLE_NAME, {
       allowInsecureConnection: allowInsecure,
     });
+    let tableCreated = false;
     try {
       await client.createTable();
+      tableCreated = true;
     } catch (err) {
       // 409 (already exists) is fine; anything else we re-throw.
       if (err.statusCode !== 409) throw err;
     }
-    return createTableBackend(client);
+    const diagnostics = {
+      backend: "azure-table",
+      persistent: true,
+      accountName: parsed.accountName || null,
+      tableEndpoint:
+        parsed.tableEndpoint ||
+        (parsed.accountName && parsed.endpointSuffix
+          ? `${parsed.protocol || "https"}://${parsed.accountName}.table.${parsed.endpointSuffix}`
+          : null),
+      tableName: TABLE_NAME,
+      tableCreatedThisInit: tableCreated,
+    };
+    return createTableBackend(client, diagnostics);
   } catch (err) {
     console.warn(
       "[storage] Failed to initialise Azure Table Storage, falling back to in-memory:",
       err.message,
     );
-    return createMemoryBackend();
+    const fallback = createMemoryBackend();
+    fallback.diagnostics = {
+      ...fallback.diagnostics,
+      reason: "Table Storage init failed; using in-memory fallback.",
+      initError: err.message,
+      initErrorCode: err.code || err.statusCode || null,
+      accountName: parsed.accountName || null,
+      tableName: TABLE_NAME,
+    };
+    return fallback;
   }
 }
 
@@ -169,9 +219,15 @@ async function backendName() {
   return backend.name;
 }
 
+async function diagnostics() {
+  const backend = await getBackend();
+  return backend.diagnostics || { backend: backend.name };
+}
+
 module.exports = {
   listFishes,
   addFish,
   clearFishes,
   backendName,
+  diagnostics,
 };
