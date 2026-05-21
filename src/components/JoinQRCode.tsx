@@ -1,20 +1,39 @@
-import { hashString } from "../utils/id";
+import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 
 type JoinQRCodeProps = {
   joinUrl: string;
 };
 
 export function JoinQRCode({ joinUrl }: JoinQRCodeProps) {
-  const seed = hashString(joinUrl);
-  const cells = Array.from({ length: 81 }, (_, index) => (seed + index * 17 + index * index) % 5 !== 0);
+  const [svgMarkup, setSvgMarkup] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    QRCode.toString(joinUrl, {
+      type: "svg",
+      errorCorrectionLevel: "M",
+      margin: 1,
+      color: { dark: "#0b1f3a", light: "#ffffff" },
+    })
+      .then((svg) => {
+        if (!cancelled) setSvgMarkup(svg);
+      })
+      .catch((err) => {
+        console.error("[QR] Failed to generate QR code:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [joinUrl]);
 
   return (
     <aside className="join-card">
-      <div className="qr-art" aria-hidden="true">
-        {cells.map((filled, index) => (
-          <span className={filled ? "qr-cell filled" : "qr-cell"} key={index} />
-        ))}
-      </div>
+      <div
+        className="qr-art"
+        aria-label={`QR code linking to ${joinUrl}`}
+        dangerouslySetInnerHTML={{ __html: svgMarkup }}
+      />
       <div>
         <span className="eyebrow">Join from your device</span>
         <strong>{joinUrl}</strong>

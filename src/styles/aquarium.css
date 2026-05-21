@@ -364,18 +364,16 @@ button {
   background: white;
   border: 14px solid white;
   border-radius: 22px;
-  display: grid;
-  gap: 4px;
-  grid-template-columns: repeat(9, 1fr);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
-.qr-cell {
-  background: transparent;
-  border-radius: 3px;
-}
-
-.qr-cell.filled {
-  background: #073b4c;
+.qr-art svg {
+  display: block;
+  height: 100%;
+  width: 100%;
 }
 
 .screen-footer {
