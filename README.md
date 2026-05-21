@@ -37,9 +37,36 @@ The workflow builds the Vite app from `/`, uses `api` for Azure Functions, and d
 
 ## Environment variables
 
-Stage 1 does not require environment variables. The API uses an in-memory store as the simplest classroom MVP.
+The API works out of the box with an **in-memory** store — perfect for local dev. For deployed classroom use, set up **Azure Table Storage** so fish persist across cold starts and across Functions instances.
 
-For a deployed multi-instance setup, replace `api/fishes/index.js` with an Azure Table Storage-backed adapter and configure the storage connection string in Azure Static Web Apps application settings.
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `AZURE_STORAGE_CONNECTION_STRING` | For persistence | Connection string for the storage account. If unset, the API falls back to in-memory mode. |
+| `AQUARIUM_TABLE_NAME` | Optional | Table name. Defaults to `fishes`. |
+
+The storage adapter lives in [api/shared/storage.js](api/shared/storage.js) and exposes `listFishes`, `addFish`, `clearFishes` — the same interface for both backends.
+
+### Configuring Azure Table Storage
+
+1. Create a Storage Account in the Azure Portal (Standard / LRS is fine).
+2. Copy a **connection string** from *Security + networking → Access keys*.
+3. In your Static Web App: *Configuration → Application settings* → add `AZURE_STORAGE_CONNECTION_STRING`.
+4. (Optional) Add `AQUARIUM_TABLE_NAME` if you want a name other than `fishes`. The table is created automatically on first request.
+
+For local dev against real storage, create `api/local.settings.json` (already gitignored by Functions tooling):
+
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AZURE_STORAGE_CONNECTION_STRING": "UseDevelopmentStorage=true"
+  }
+}
+```
+
+That value uses **Azurite** (the local storage emulator) if you have it running.
 
 ## Stage 2 live coding plan
 

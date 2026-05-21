@@ -2,5 +2,8 @@
   "name": "aquarium-api",
   "version": "0.1.0",
   "private": true,
-  "main": "fishes/index.js"
+  "main": "fishes/index.js",
+  "dependencies": {
+    "@azure/data-tables": "^13.3.0"
+  }
 }
