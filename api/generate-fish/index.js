@@ -213,10 +213,24 @@ module.exports = async function generateFish(context, req) {
   const providers = describeProviders();
 
   if (req.method.toUpperCase() === "GET") {
+    const envKeys = Object.keys(process.env);
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { providers, defaultProvider: providers.foundry.configured ? "foundry" : providers.github.configured ? "github" : null },
+      body: {
+        providers,
+        defaultProvider: providers.foundry.configured ? "foundry" : providers.github.configured ? "github" : null,
+        envPresence: {
+          AZURE_AI_FOUNDRY_ENDPOINT: Boolean(process.env.AZURE_AI_FOUNDRY_ENDPOINT),
+          AZURE_AI_FOUNDRY_KEY: Boolean(process.env.AZURE_AI_FOUNDRY_KEY),
+          AZURE_AI_FOUNDRY_MODEL: Boolean(process.env.AZURE_AI_FOUNDRY_MODEL),
+          GITHUB_MODELS_TOKEN: Boolean(process.env.GITHUB_MODELS_TOKEN),
+          GITHUB_MODELS_MODEL: Boolean(process.env.GITHUB_MODELS_MODEL),
+          GITHUB_MODELS_ENDPOINT: Boolean(process.env.GITHUB_MODELS_ENDPOINT),
+        },
+        // Names of env vars that look related (no values exposed).
+        relatedEnvKeys: envKeys.filter((k) => /^(GITHUB|AZURE_AI|GH_|MODELS_)/.test(k)),
+      },
     };
     return;
   }
