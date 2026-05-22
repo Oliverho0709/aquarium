@@ -1,6 +1,7 @@
 import { renderFishTemplate } from "../assets/fishTemplates";
 import type { Fish } from "../types";
 import { hashString } from "../utils/id";
+import { namespaceSvgIds } from "../utils/svg";
 import { FishLabel } from "./FishLabel";
 
 type SwimmingFishProps = {
@@ -14,7 +15,7 @@ export function SwimmingFish({ fish }: SwimmingFishProps) {
   const delay = -((seed % 13) + 1);
   const scale = 0.82 + (seed % 42) / 100;
   const direction = seed % 2 === 0 ? "normal" : "reverse";
-  const svgMarkup =
+  const rawSvg =
     fish.svgMarkup ??
     renderFishTemplate(fish.templateId ?? "classic", {
       bodyColor: fish.bodyColor ?? "#ff8fab",
@@ -22,6 +23,7 @@ export function SwimmingFish({ fish }: SwimmingFishProps) {
       tailColor: fish.tailColor ?? "#06d6a0",
       patternColor: fish.patternColor ?? "#ffffff",
     });
+  const svgMarkup = namespaceSvgIds(rawSvg, `f${fish.id}`);
 
   return (
     <div

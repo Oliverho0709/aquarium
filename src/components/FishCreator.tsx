@@ -30,6 +30,7 @@ export function FishCreator({ creatorName, roomId }: FishCreatorProps) {
   const [generatedFish, setGeneratedFish] = useState<GeneratedFishSvg>(() => generateFishFromDescription(description));
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
 
   const templateSvg = useMemo(() => renderFishTemplate(templateId, colors), [colors, templateId]);
 
@@ -116,9 +117,10 @@ export function FishCreator({ creatorName, roomId }: FishCreatorProps) {
             fishName={fishName}
             onFishNameChange={setFishName}
             onGenerate={handleGenerate}
+            onGeneratingChange={setIsAiGenerating}
           />
-          <button disabled={isSubmitting} onClick={() => void submitFish()} type="button">
-            {isSubmitting ? "Releasing..." : "Release Fish into Aquarium"}
+          <button disabled={isSubmitting || isAiGenerating} onClick={() => void submitFish()} type="button">
+            {isAiGenerating ? "Generating…" : isSubmitting ? "Releasing..." : "Release Fish into Aquarium"}
           </button>
         </div>
       )}

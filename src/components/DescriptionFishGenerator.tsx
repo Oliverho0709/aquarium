@@ -13,6 +13,7 @@ type DescriptionFishGeneratorProps = {
   fishName: string;
   onFishNameChange: (value: string) => void;
   onGenerate: (description: string, fish: GeneratedFishSvg) => void;
+  onGeneratingChange?: (isGenerating: boolean) => void;
   description: string;
 };
 
@@ -47,6 +48,7 @@ export function DescriptionFishGenerator({
   fishName,
   onFishNameChange,
   onGenerate,
+  onGeneratingChange,
   description,
 }: DescriptionFishGeneratorProps) {
   const [draftDescription, setDraftDescription] = useState(description || samples[0]);
@@ -63,6 +65,10 @@ export function DescriptionFishGenerator({
   const [selectedProvider, setSelectedProvider] = useState<AiProvider>("foundry");
   const [stageIndex, setStageIndex] = useState(0);
   const stageTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    onGeneratingChange?.(isGenerating);
+  }, [isGenerating, onGeneratingChange]);
 
   useEffect(() => {
     if (!isGenerating) {
