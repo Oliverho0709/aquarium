@@ -55,6 +55,7 @@ export function FishCreator({ creatorName, roomId }: FishCreatorProps) {
       finColor: mode === "template" ? colors.finColor : generatedFish.finColor,
       tailColor: mode === "template" ? colors.tailColor : generatedFish.tailColor,
       patternColor: mode === "template" ? colors.patternColor : generatedFish.patternColor,
+      size: 0.2,
       createdAt: new Date().toISOString(),
     };
 

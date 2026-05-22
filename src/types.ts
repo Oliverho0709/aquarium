@@ -13,6 +13,7 @@ export type Fish = {
   finColor?: string;
   tailColor?: string;
   patternColor?: string;
+  size?: number; // Growth state: 0.2 = 20% size, up to 2.0 = 200%
   createdAt: string;
 };
 

@@ -14,7 +14,9 @@ type InternalFish = {
   ty: number;
   scale: number;
   baseScale: number;
+  sizeFactor: number;
   nextWanderAt: number;
+  nextGrowAt: number;
 };
 
 type InternalFood = {
@@ -64,6 +66,7 @@ export function useAquariumSimulation(fishes: Fish[]) {
       if (map.has(f.id)) continue;
       const seed = hashString(f.id);
       const baseScale = 0.82 + (seed % 42) / 100;
+      const sizeFactor = typeof f.size === "number" ? Math.min(2, Math.max(0.2, f.size)) : 0.2;
       map.set(f.id, {
         x: rand(PAD_X + 6, 100 - PAD_X - 6),
         y: rand(PAD_TOP + 4, 100 - PAD_BOTTOM - 4),
@@ -71,9 +74,11 @@ export function useAquariumSimulation(fishes: Fish[]) {
         vy: rand(-1, 1),
         tx: rand(PAD_X, 100 - PAD_X),
         ty: rand(PAD_TOP, 100 - PAD_BOTTOM),
-        scale: baseScale,
+        scale: baseScale * sizeFactor,
         baseScale,
+        sizeFactor,
         nextWanderAt: 0,
+        nextGrowAt: rand(9000, 16000),
       });
     }
   }, [fishes]);
@@ -141,6 +146,12 @@ export function useAquariumSimulation(fishes: Fish[]) {
       let consumed = 0;
 
       for (const [id, s] of fishEntries) {
+        if (ts > s.nextGrowAt && s.sizeFactor < 2) {
+          s.sizeFactor = Math.min(2, s.sizeFactor + 0.2);
+          s.nextGrowAt = ts + rand(9000, 16000);
+          s.scale = s.baseScale * s.sizeFactor;
+        }
+
         const target = fishToFood.get(id);
         let desiredVx: number;
         let desiredVy: number;
@@ -153,7 +164,8 @@ export function useAquariumSimulation(fishes: Fish[]) {
           if (d < EAT_DIST) {
             eatenIds.add(target.id);
             consumed++;
-            s.scale = s.baseScale * 1.18;
+            s.sizeFactor = Math.min(2, s.sizeFactor + 0.2);
+            s.scale = s.baseScale * s.sizeFactor * 1.18;
           }
         } else {
           if (ts > s.nextWanderAt || Math.hypot(s.tx - s.x, s.ty - s.y) < 4) {
@@ -174,8 +186,9 @@ export function useAquariumSimulation(fishes: Fish[]) {
         s.vy += (desiredVy - s.vy) * ease;
         s.x = Math.max(PAD_X, Math.min(100 - PAD_X, s.x + s.vx * dt));
         s.y = Math.max(PAD_TOP, Math.min(100 - PAD_BOTTOM, s.y + s.vy * dt));
-        // Ease scale back down (eat pulse)
-        s.scale += (s.baseScale - s.scale) * Math.min(1, dt * 2.5);
+        // Ease scale back down toward current growth size after pulses
+        const targetScale = s.baseScale * s.sizeFactor;
+        s.scale += (targetScale - s.scale) * Math.min(1, dt * 2.5);
 
         states[id] = {
           x: s.x,

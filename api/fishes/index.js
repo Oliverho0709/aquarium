@@ -11,7 +11,8 @@ function validateFish(candidate) {
       typeof candidate.roomId === "string" &&
       typeof candidate.creatorName === "string" &&
       typeof candidate.fishName === "string" &&
-      typeof candidate.createdAt === "string",
+      typeof candidate.createdAt === "string" &&
+      (candidate.size === undefined || typeof candidate.size === "number"),
   );
 }
 
