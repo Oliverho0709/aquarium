@@ -34,13 +34,26 @@ Given a short description, return STRICT JSON (no prose, no markdown) with this 
   "summary":      "one short sentence"
 }
 
-Rules for svgMarkup:
+Fish anatomy & layout (viewBox is 240 wide x 120 tall, fish faces RIGHT):
+- BODY: centered around x=110, y=60. Body length ~140 (x≈40 to x≈180). The body shape is up to you — it can be an ellipse, rounded rectangle, triangle/wedge, hexagon, blob, teardrop, diamond, or any creative silhouette. Be bold and varied.
+- TAIL (caudal fin): attached on the LEFT side of the body, roughly x=20-55, y=35-85. Fan, forked, ribbon, flame, or geometric shapes all welcome.
+- TOP FIN (dorsal): on top of the body, roughly x=80-150, y=15-55.
+- BOTTOM/SIDE FIN (pectoral): below or on the front of the body, roughly x=110-160, y=65-100.
+- EYE: on the front (right) third of the body, roughly x=150-175, y=45-65. Always include an eye (white sclera + dark pupil, or a stylized equivalent). A tiny highlight dot is encouraged.
+- MOUTH: at the front tip of the body, roughly x=175-195, y=55-70. Can be a smile, a tiny circle, or a beak — match the personality.
+- PATTERN: stripes, spots, scales, runes, glowing nodes — use the patternColor on top of the body.
+
+Style freedom:
+- You MAY (and should!) use linear or radial GRADIENTS for richer color. Define them in <defs> with <linearGradient> / <radialGradient> / <stop> and reference via fill="url(#id)". Use stop-color and stop-opacity (no CSS style attributes needed, but inline style="stop-color:#xxx" is OK).
+- You MAY use opacity, fill-opacity, stroke, stroke-width, stroke-linecap, stroke-linejoin.
+- Use the four declared colors (bodyColor / finColor / tailColor / patternColor) as the dominant palette, but gradient stops may blend toward lighter/darker shades of them.
+
+Hard rules for svgMarkup:
 - Root element must be <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120">.
-- Total markup MUST be under 1800 characters.
-- Use only basic shapes: path, circle, ellipse, rect, polygon, line, g.
-- No <script>, no <foreignObject>, no external references, no <image>, no <style> blocks.
-- Fish faces RIGHT. Keep the design playful and bold so it reads on a projector.
-- Use the four colors above prominently.
+- Total markup MUST be under 3500 characters.
+- Allowed elements only: svg, defs, g, path, circle, ellipse, rect, polygon, polyline, line, linearGradient, radialGradient, stop, title, desc.
+- FORBIDDEN: <script>, <foreignObject>, <image>, <use> with external href, <style> blocks, event handlers (onload, onclick, etc.), external URLs.
+- Keep design bold and readable on a projector — strong silhouette, clear eye, no thin spidery details.
 - Do NOT include xml prolog or DOCTYPE.`;
 
 // ---------- Foundry endpoint normalization ----------
@@ -123,8 +136,8 @@ async function buildFoundryRequest() {
     headers,
     model: process.env.AZURE_AI_FOUNDRY_MODEL || "DeepSeek-V4-Pro",
     bodyExtras: {
-      temperature: 0.9,
-      max_tokens: 900,
+      temperature: 0.95,
+      max_tokens: 1600,
     },
   };
 }
@@ -155,7 +168,7 @@ function buildGithubRequest() {
     // Reasoning models spend tokens on internal reasoning before emitting output;
     // give them a large budget and tell them not to over-think this.
     bodyExtras: {
-      max_completion_tokens: 4000,
+      max_completion_tokens: 6000,
       reasoning_effort: "minimal",
     },
   };
@@ -215,7 +228,7 @@ function validateAndCoerce(parsed) {
   if (!svg.startsWith("<svg")) return null;
   if (!/viewBox\s*=\s*"0\s+0\s+240\s+120"/.test(svg)) return null;
   if (svg.length > 4000) return null;
-  if (/<script|<foreignObject|<image|onload=|onclick=/i.test(svg)) return null;
+  if (/<script|<foreignObject|<image|<iframe|on\w+\s*=|href\s*=\s*"https?:|xlink:href\s*=\s*"https?:|javascript:/i.test(svg)) return null;
   return {
     bodyColor: parsed.bodyColor,
     finColor: parsed.finColor,

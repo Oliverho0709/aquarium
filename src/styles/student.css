@@ -193,6 +193,69 @@ textarea:focus {
   margin-top: 8px;
 }
 
+.ai-progress {
+  align-items: center;
+  background: linear-gradient(135deg, #eef4ff, #e8fbff);
+  border: 1px solid #c7e0f4;
+  border-radius: 16px;
+  display: flex;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 12px 14px;
+}
+
+.ai-progress-spinner {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  height: 28px;
+  justify-content: center;
+  width: 44px;
+}
+
+.ai-progress-bubble {
+  background: radial-gradient(circle at 30% 30%, #ffffff, #00c2ff 70%);
+  border-radius: 50%;
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+  animation: ai-progress-bob 1s ease-in-out infinite;
+}
+
+.ai-progress-bubble:nth-child(2) {
+  animation-delay: 0.15s;
+  background: radial-gradient(circle at 30% 30%, #ffffff, #7b2ff7 70%);
+}
+
+.ai-progress-bubble:nth-child(3) {
+  animation-delay: 0.3s;
+  background: radial-gradient(circle at 30% 30%, #ffffff, #06d6a0 70%);
+}
+
+@keyframes ai-progress-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.7; }
+  50%      { transform: translateY(-8px); opacity: 1; }
+}
+
+.ai-progress-text {
+  color: #004b87;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.3;
+}
+
+.ai-progress-text strong {
+  font-size: 0.95rem;
+}
+
+.ai-progress-stage {
+  color: #5b7e98;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .generator-actions button {
   flex: 1 1 200px;
 }

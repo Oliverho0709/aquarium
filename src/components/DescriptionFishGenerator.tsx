@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { generateFishFromDescription } from "../services/fishGenerator";
 import {
   generateFishWithAi,
@@ -32,6 +32,17 @@ const providerLabels: Record<AiProvider, string> = {
   github: "GitHub Models",
 };
 
+const generationStages = [
+  "Sketching skeleton…",
+  "Shaping the body…",
+  "Adding fins and tail…",
+  "Placing the eye…",
+  "Mixing gradient colors…",
+  "Painting patterns…",
+  "Polishing scales…",
+  "Almost ready…",
+];
+
 export function DescriptionFishGenerator({
   fishName,
   onFishNameChange,
@@ -50,6 +61,28 @@ export function DescriptionFishGenerator({
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [providerStatus, setProviderStatus] = useState<AiProvidersStatus | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<AiProvider>("foundry");
+  const [stageIndex, setStageIndex] = useState(0);
+  const stageTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      if (stageTimerRef.current !== null) {
+        window.clearInterval(stageTimerRef.current);
+        stageTimerRef.current = null;
+      }
+      return;
+    }
+    setStageIndex(0);
+    stageTimerRef.current = window.setInterval(() => {
+      setStageIndex((i) => (i + 1) % generationStages.length);
+    }, 1100);
+    return () => {
+      if (stageTimerRef.current !== null) {
+        window.clearInterval(stageTimerRef.current);
+        stageTimerRef.current = null;
+      }
+    };
+  }, [isGenerating]);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +188,19 @@ export function DescriptionFishGenerator({
         ))}
       </div>
       <FishPreview svgMarkup={previewFish.svgMarkup} />
+      {isGenerating ? (
+        <div className="ai-progress" role="status" aria-live="polite">
+          <div className="ai-progress-spinner" aria-hidden="true">
+            <span className="ai-progress-bubble" />
+            <span className="ai-progress-bubble" />
+            <span className="ai-progress-bubble" />
+          </div>
+          <div className="ai-progress-text">
+            <strong>{providerLabels[selectedProvider]} is designing your fish</strong>
+            <span className="ai-progress-stage">{generationStages[stageIndex]}</span>
+          </div>
+        </div>
+      ) : null}
       <p className="status-message" aria-live="polite">
         Preview: <strong>{previewSource === "ai" ? "AI generated" : "Built-in"}</strong>
         {aiInfo ? ` · ${providerLabels[aiInfo.provider]} (${aiInfo.model})` : ""}
