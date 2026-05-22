@@ -160,6 +160,65 @@ button {
   color: #cae9ff;
 }
 
+.class-goal {
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 18px;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  font-weight: 800;
+  gap: 6px;
+  min-width: 180px;
+  padding: 10px 14px;
+}
+
+.class-goal-label {
+  align-items: baseline;
+  display: flex;
+  font-size: 0.78rem;
+  justify-content: space-between;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.class-goal-label strong {
+  color: #ffd166;
+  font-size: 0.95rem;
+}
+
+.class-goal-bar {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.class-goal-bar-fill {
+  background: linear-gradient(90deg, #06d6a0, #ffd166);
+  border-radius: 999px;
+  height: 100%;
+  transition: width 320ms ease;
+}
+
+.class-goal--reached .class-goal-bar-fill {
+  background: linear-gradient(90deg, #ef476f, #d72638);
+}
+
+.class-goal-hint {
+  color: #ffd166;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  animation: classGoalBlink 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes classGoalBlink {
+  from { opacity: 0.6; }
+  to   { opacity: 1; }
+}
+
 .sound-toggle,
 .reset-button {
   background: #ffd166;
@@ -345,6 +404,54 @@ button {
   right: 18px;
   top: 14px;
   z-index: 4;
+}
+
+.shark {
+  position: absolute;
+  width: clamp(220px, 22vw, 380px);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 5;
+  filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.5));
+}
+
+.shark-art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.shark--hunt {
+  animation: sharkPulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes sharkPulse {
+  from { filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.5)); }
+  to   { filter: drop-shadow(0 14px 28px rgba(255, 70, 70, 0.55)); }
+}
+
+.shark-banner {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(135deg, #d72638, #7a1226);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 18px;
+  color: #fff;
+  font-size: clamp(1.2rem, 2.4vw, 2rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding: 14px 28px;
+  text-transform: uppercase;
+  z-index: 6;
+  box-shadow: 0 18px 40px rgba(215, 38, 56, 0.6);
+  animation: sharkBannerIn 0.5s ease-out;
+}
+
+@keyframes sharkBannerIn {
+  from { opacity: 0; transform: translate(-50%, -80%) scale(0.85); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 .fish-label {

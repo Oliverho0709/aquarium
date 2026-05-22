@@ -47,6 +47,17 @@ export function ScreenPage() {
     await refreshFishes();
   }
 
+  async function handleSharkFinished() {
+    const result = await clearFishes(roomId);
+    previousCount.current = 0;
+    setMessage(
+      result.source === "api"
+        ? "The shark cleared the tank! Goal reset for the next round."
+        : "Demo mode: the shark cleared the local tank.",
+    );
+    await refreshFishes();
+  }
+
   return (
     <main className="screen-page">
       <header className="screen-header">
@@ -65,7 +76,7 @@ export function ScreenPage() {
         </div>
       </header>
       <div className="screen-content">
-        <Aquarium fishes={fishes} />
+        <Aquarium fishes={fishes} onSharkFinished={() => void handleSharkFinished()} />
         <JoinQRCode joinUrl={joinUrl} />
       </div>
       <UnlockCreature />

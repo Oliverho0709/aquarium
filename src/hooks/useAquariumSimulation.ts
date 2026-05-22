@@ -4,6 +4,17 @@ import { hashString } from "../utils/id";
 
 export type FishSimState = { x: number; y: number; facing: 1 | -1; scale: number };
 export type FoodPelletState = { id: string; x: number; y: number };
+export type SharkSimState = {
+  x: number;
+  y: number;
+  facing: 1 | -1;
+  mode: "hunt" | "exit";
+};
+
+type SimulationOptions = {
+  sharkActive?: boolean;
+  onSharkFinished?: () => void;
+};
 
 type InternalFish = {
   x: number;
@@ -25,6 +36,16 @@ type InternalFood = {
   vy: number;
 };
 
+type InternalShark = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  facing: 1 | -1;
+  mode: "hunt" | "exit";
+  exitDir: 1 | -1;
+};
+
 const MAX_FOOD = 8;
 const SPAWN_MIN_MS = 1600;
 const SPAWN_MAX_MS = 3800;
@@ -35,14 +56,20 @@ const PAD_X = 4;
 const PAD_TOP = 8;
 const PAD_BOTTOM = 14;
 
+const SHARK_SPEED = 28;
+const SHARK_EAT_DIST = 8;
+const SHARK_EXIT_X = 125;
+
 function rand(min: number, max: number) {
   return min + Math.random() * (max - min);
 }
 
-export function useAquariumSimulation(fishes: Fish[]) {
+export function useAquariumSimulation(fishes: Fish[], options: SimulationOptions = {}) {
   const [fishStates, setFishStates] = useState<Record<string, FishSimState>>({});
   const [foods, setFoods] = useState<FoodPelletState[]>([]);
   const [eatCount, setEatCount] = useState(0);
+  const [sharkState, setSharkState] = useState<SharkSimState | null>(null);
+  const [sharkEatenIds, setSharkEatenIds] = useState<Set<string>>(new Set());
 
   const fishMapRef = useRef<Map<string, InternalFish>>(new Map());
   const foodsRef = useRef<InternalFood[]>([]);
@@ -51,6 +78,13 @@ export function useAquariumSimulation(fishes: Fish[]) {
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const fishesRef = useRef<Fish[]>(fishes);
+
+  const sharkRef = useRef<InternalShark | null>(null);
+  const sharkEatenRef = useRef<Set<string>>(new Set());
+  const sharkActiveRef = useRef(false);
+  const sharkFinishedFiredRef = useRef(false);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   // Sync fish set
   useEffect(() => {
@@ -77,6 +111,32 @@ export function useAquariumSimulation(fishes: Fish[]) {
       });
     }
   }, [fishes]);
+
+  // Activate / reset shark when sharkActive flips.
+  useEffect(() => {
+    const active = Boolean(options.sharkActive);
+    if (active && !sharkActiveRef.current) {
+      sharkActiveRef.current = true;
+      sharkFinishedFiredRef.current = false;
+      sharkEatenRef.current = new Set();
+      setSharkEatenIds(new Set());
+      sharkRef.current = {
+        x: 115,
+        y: rand(35, 55),
+        vx: -SHARK_SPEED,
+        vy: 0,
+        facing: -1,
+        mode: "hunt",
+        exitDir: -1,
+      };
+    } else if (!active && sharkActiveRef.current) {
+      sharkActiveRef.current = false;
+      sharkRef.current = null;
+      sharkEatenRef.current = new Set();
+      setSharkState(null);
+      setSharkEatenIds(new Set());
+    }
+  }, [options.sharkActive]);
 
   useEffect(() => {
     function tick(ts: number) {
@@ -141,6 +201,7 @@ export function useAquariumSimulation(fishes: Fish[]) {
       let consumed = 0;
 
       for (const [id, s] of fishEntries) {
+        if (sharkEatenRef.current.has(id)) continue;
         const target = fishToFood.get(id);
         let desiredVx: number;
         let desiredVy: number;
@@ -191,6 +252,81 @@ export function useAquariumSimulation(fishes: Fish[]) {
         setEatCount(eatCountRef.current);
       }
       setFoods(foodsRef.current.map((f) => ({ id: f.id, x: f.x, y: f.y })));
+
+      // ---- Shark ----
+      const shark = sharkRef.current;
+      if (shark) {
+        if (shark.mode === "hunt") {
+          // Find nearest alive fish (one not yet eaten).
+          let prey: InternalFish | null = null;
+          let preyId: string | null = null;
+          let bestDist = Infinity;
+          for (const [id, s] of fishEntries) {
+            if (sharkEatenRef.current.has(id)) continue;
+            const d = Math.hypot(s.x - shark.x, s.y - shark.y);
+            if (d < bestDist) {
+              bestDist = d;
+              prey = s;
+              preyId = id;
+            }
+          }
+          if (prey && preyId) {
+            const dx = prey.x - shark.x;
+            const dy = prey.y - shark.y;
+            const d = Math.hypot(dx, dy) || 1;
+            shark.vx = (dx / d) * SHARK_SPEED;
+            shark.vy = (dy / d) * SHARK_SPEED;
+            if (d < SHARK_EAT_DIST) {
+              sharkEatenRef.current.add(preyId);
+              // Snapshot updated set for React.
+              setSharkEatenIds(new Set(sharkEatenRef.current));
+            }
+          } else {
+            // No prey left — switch to exit.
+            shark.mode = "exit";
+            shark.exitDir = shark.x < 50 ? -1 : 1;
+            shark.vx = SHARK_SPEED * shark.exitDir;
+            shark.vy = 0;
+          }
+        } else {
+          // exit
+          shark.vx = SHARK_SPEED * shark.exitDir;
+          shark.vy *= 0.9;
+        }
+        shark.x += shark.vx * dt;
+        shark.y += shark.vy * dt;
+        shark.facing = shark.vx >= 0 ? 1 : -1;
+        // Vertical clamp during hunt only.
+        if (shark.mode === "hunt") {
+          shark.y = Math.max(PAD_TOP, Math.min(100 - PAD_BOTTOM, shark.y));
+        }
+
+        const offstage =
+          shark.mode === "exit" &&
+          (shark.x < -SHARK_EXIT_X + 20 || shark.x > SHARK_EXIT_X);
+
+        if (offstage) {
+          sharkRef.current = null;
+          setSharkState(null);
+          if (!sharkFinishedFiredRef.current) {
+            sharkFinishedFiredRef.current = true;
+            const cb = optionsRef.current.onSharkFinished;
+            if (cb) cb();
+          }
+        } else {
+          setSharkState({
+            x: shark.x,
+            y: shark.y,
+            facing: shark.facing,
+            mode: shark.mode,
+          });
+        }
+      }
+
+      // Strip eaten fish from output (visually they disappear).
+      for (const id of sharkEatenRef.current) {
+        delete states[id];
+      }
       setFishStates(states);
 
       rafRef.current = requestAnimationFrame(tick);
@@ -202,5 +338,5 @@ export function useAquariumSimulation(fishes: Fish[]) {
     };
   }, []);
 
-  return { fishStates, foods, eatCount };
+  return { fishStates, foods, eatCount, sharkState, sharkEatenIds };
 }
