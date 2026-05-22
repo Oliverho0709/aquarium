@@ -285,13 +285,66 @@ button {
   z-index: 2;
 }
 
+.swimming-fish--sim {
+  animation: none;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 90ms linear, top 90ms linear;
+  will-change: left, top;
+}
+
 .swimming-fish-art {
   filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.2));
+  transform-origin: center;
+  transition: transform 80ms linear;
 }
 
 .swimming-fish svg {
   display: block;
   width: 100%;
+}
+
+.food-pellet {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 32% 30%, #ffe1bf, #ff8a3d 60%, #b9410f);
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, 0.35),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.25),
+    0 0 8px rgba(255, 138, 61, 0.5);
+  pointer-events: none;
+  z-index: 3;
+  animation: foodWobble 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes foodWobble {
+  from {
+    filter: hue-rotate(-10deg) saturate(1);
+  }
+  to {
+    filter: hue-rotate(12deg) saturate(1.25);
+  }
+}
+
+.feed-counter {
+  align-items: center;
+  background: rgba(1, 22, 39, 0.6);
+  border: 1px solid rgba(255, 209, 102, 0.5);
+  border-radius: 999px;
+  color: #ffd166;
+  display: inline-flex;
+  font-size: 1rem;
+  font-weight: 800;
+  gap: 8px;
+  letter-spacing: 0.02em;
+  padding: 6px 14px;
+  position: absolute;
+  right: 18px;
+  top: 14px;
+  z-index: 4;
 }
 
 .fish-label {

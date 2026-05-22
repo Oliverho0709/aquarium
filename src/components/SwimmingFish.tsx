@@ -1,20 +1,15 @@
 import { renderFishTemplate } from "../assets/fishTemplates";
 import type { Fish } from "../types";
-import { hashString } from "../utils/id";
+import type { FishSimState } from "../hooks/useAquariumSimulation";
 import { namespaceSvgIds } from "../utils/svg";
 import { FishLabel } from "./FishLabel";
 
 type SwimmingFishProps = {
   fish: Fish;
+  state?: FishSimState;
 };
 
-export function SwimmingFish({ fish }: SwimmingFishProps) {
-  const seed = hashString(fish.id);
-  const top = 18 + (seed % 58);
-  const duration = 18 + (seed % 22);
-  const delay = -((seed % 13) + 1);
-  const scale = 0.82 + (seed % 42) / 100;
-  const direction = seed % 2 === 0 ? "normal" : "reverse";
+export function SwimmingFish({ fish, state }: SwimmingFishProps) {
   const rawSvg =
     fish.svgMarkup ??
     renderFishTemplate(fish.templateId ?? "classic", {
@@ -25,18 +20,23 @@ export function SwimmingFish({ fish }: SwimmingFishProps) {
     });
   const svgMarkup = namespaceSvgIds(rawSvg, `f${fish.id}`);
 
+  if (!state) {
+    return null;
+  }
+
   return (
     <div
-      className="swimming-fish"
+      className="swimming-fish swimming-fish--sim"
       style={{
-        top: `${top}%`,
-        animationDuration: `${duration}s`,
-        animationDelay: `${delay}s`,
-        animationDirection: direction,
-        transform: `scale(${scale})`,
+        left: `${state.x}%`,
+        top: `${state.y}%`,
       }}
     >
-      <div className="swimming-fish-art" dangerouslySetInnerHTML={{ __html: svgMarkup }} />
+      <div
+        className="swimming-fish-art"
+        style={{ transform: `scaleX(${state.facing}) scale(${state.scale})` }}
+        dangerouslySetInnerHTML={{ __html: svgMarkup }}
+      />
       <FishLabel creatorName={fish.creatorName} fishName={fish.fishName} />
     </div>
   );
